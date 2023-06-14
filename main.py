@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from mpl_toolkits.mplot3d import Axes3D
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout
-
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox
+from PyQt5.QtCore import QTimer
 
 # Функция, описывающая систему дифференциальных уравнений
 def system(t, variables, a1, a2, b1, b2, b3, c1, c2):
@@ -23,6 +23,11 @@ class MainWindow(QWidget):
 
         self.setWindowTitle("Решение системы дифференциальных уравнений")
         self.layout = QVBoxLayout()
+
+        self.interval_label = QLabel("Интервал (мс):")
+        self.interval_input = QLineEdit()
+        self.layout.addWidget(self.interval_label)
+        self.layout.addWidget(self.interval_input)
 
         # Ввод коэффициентов
         self.a1_label = QLabel("a1:")
@@ -76,25 +81,75 @@ class MainWindow(QWidget):
         self.layout.addWidget(self.R0_label)
         self.layout.addWidget(self.R0_input)
 
-        # Кнопка запуска
-        self.run_button = QPushButton("Запустить")
-        self.layout.addWidget(self.run_button)
-        self.run_button.clicked.connect(self.run_simulation)
+        # Кнопки
+        self.button_group = QWidget()
+        self.button_layout = QVBoxLayout()
+
+        self.realtime_button = QPushButton("Запустить в реальном времени")
+        self.button_layout.addWidget(self.realtime_button)
+        self.realtime_button.clicked.connect(self.run_realtime_simulation)
+
+        self.pause_button = QPushButton("Пауза")
+        self.button_layout.addWidget(self.pause_button)
+        self.pause_button.clicked.connect(self.pause_simulation)
+        self.pause_button.setEnabled(False)
+
+        self.resume_button = QPushButton("Продолжить")
+        self.button_layout.addWidget(self.resume_button)
+        self.resume_button.clicked.connect(self.resume_simulation)
+        self.resume_button.setEnabled(False)
+
+        self.new_plot_button = QPushButton("Новый график")
+        self.button_layout.addWidget(self.new_plot_button)
+        self.new_plot_button.clicked.connect(self.new_plot)
+        self.new_plot_button.setEnabled(False)
+
+        self.button_group.setLayout(self.button_layout)
+        self.layout.addWidget(self.button_group)
+
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_realtime_plot)
+
+        self.is_paused = False
+        self.interval = 10  # Интервал между обновлениями графика в миллисекундах
 
         self.setLayout(self.layout)
 
-    def run_simulation(self):
-        # Извлечение введенных данных
-        a1 = float(self.a1_input.text())
-        a2 = float(self.a2_input.text())
-        b1 = float(self.b1_input.text())
-        b2 = float(self.b2_input.text())
-        b3 = float(self.b3_input.text())
-        c1 = float(self.c1_input.text())
-        c2 = float(self.c2_input.text())
-        V0 = float(self.V0_input.text())
-        P0 = float(self.P0_input.text())
-        R0 = float(self.R0_input.text())
+    def run_realtime_simulation(self):
+        if self.timer.isActive():
+            return
+        self.interval = int(self.interval_input.text())
+
+        # Проверка ввода для интервала
+        try:
+            self.interval = int(self.interval_input.text())
+        except ValueError:
+            QMessageBox.warning(self, "Ошибка", "Некорректный ввод для интервала.")
+            return
+
+        # Проверка ввода для коэффициентов
+        try:
+            a1 = float(self.a1_input.text())
+            a2 = float(self.a2_input.text())
+            b1 = float(self.b1_input.text())
+            b2 = float(self.b2_input.text())
+            b3 = float(self.b3_input.text())
+            c1 = float(self.c1_input.text())
+            c2 = float(self.c2_input.text())
+        except ValueError:
+            QMessageBox.warning(self, "Ошибка", "Некорректный ввод для коэффициентов.")
+            return
+
+        # Проверка ввода для начальных условий
+        try:
+            V0 = float(self.V0_input.text())
+            P0 = float(self.P0_input.text())
+            R0 = float(self.R0_input.text())
+        except ValueError:
+            QMessageBox.warning(self, "Ошибка", "Некорректный ввод для начальных условий.")
+            return
 
         # Временные точки для интегрирования
         t_start = 0
@@ -111,14 +166,60 @@ class MainWindow(QWidget):
         R = solution.y[2]
 
         # Визуализация результата
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.plot(V, P, R)
-        ax.set_xlabel('V')
-        ax.set_ylabel('P')
-        ax.set_zlabel('R')
-        plt.show()
+        self.V = V
+        self.P = P
+        self.R = R
+        self.idx = 0
 
+        self.ax.clear()
+        self.ax.set_xlabel('V')
+        self.ax.set_ylabel('P')
+        self.ax.set_zlabel('R')
+
+        self.realtime_button.setEnabled(False)
+        self.pause_button.setEnabled(True)
+        self.resume_button.setEnabled(False)
+        self.new_plot_button.setEnabled(False)
+
+        self.timer.start(self.interval)
+        self.fig.show()
+
+    def pause_simulation(self):
+        if self.timer.isActive():
+            self.timer.stop()
+            self.pause_button.setEnabled(False)
+            self.resume_button.setEnabled(True)
+            self.new_plot_button.setEnabled(True)
+            self.is_paused = True
+
+    def resume_simulation(self):
+        if not self.timer.isActive() and self.is_paused:
+            self.timer.start(self.interval)
+            self.pause_button.setEnabled(True)
+            self.resume_button.setEnabled(False)
+            self.new_plot_button.setEnabled(False)
+            self.is_paused = False
+
+    def update_realtime_plot(self):
+        # Обновление графика в реальном времени
+        try:
+            self.ax.plot([self.V[self.idx-1], self.V[self.idx]], [self.P[self.idx-1], self.P[self.idx]], [self.R[self.idx-1], self.R[self.idx]], 'b-')
+
+            self.idx += 1
+            self.fig.canvas.draw()
+        except IndexError:
+            self.timer.stop()
+            self.realtime_button.setEnabled(True)
+            self.pause_button.setEnabled(False)
+            self.resume_button.setEnabled(False)
+            self.new_plot_button.setEnabled(True)
+            QMessageBox.information(self, "Информация", "Отрисовка завершена.")
+
+    def new_plot(self):
+        self.realtime_button.setEnabled(True)
+        self.new_plot_button.setEnabled(False)
+        self.ax.clear()
+        self.fig.canvas.draw()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
