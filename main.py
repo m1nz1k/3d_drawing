@@ -113,11 +113,22 @@ class MainWindow(QWidget):
         self.timer.timeout.connect(self.update_realtime_plot)
 
         self.is_paused = False
-        self.interval = 10  # Интервал между обновлениями графика в миллисекундах
+        self.interval = 0  # Интервал между обновлениями графика в миллисекундах
+
+        self.fixed_time_label = QLabel("Фиксированное время (мс):")
+        self.fixed_time_input = QLineEdit()
+        self.layout.addWidget(self.fixed_time_label)
+        self.layout.addWidget(self.fixed_time_input)
+
+        self.fixed_time = 1000  # Значение фиксированного времени по умолчанию
+
 
         self.setLayout(self.layout)
 
+
+
     def run_realtime_simulation(self):
+
         if self.timer.isActive():
             return
         self.interval = int(self.interval_input.text())
@@ -128,6 +139,15 @@ class MainWindow(QWidget):
         except ValueError:
             QMessageBox.warning(self, "Ошибка", "Некорректный ввод для интервала.")
             return
+
+        self.fixed_time = None
+        fixed_time_text = self.fixed_time_input.text()
+        if fixed_time_text:
+            try:
+                self.fixed_time = int(fixed_time_text)
+            except ValueError:
+                QMessageBox.warning(self, "Ошибка", "Некорректный ввод для фиксированного времени.")
+                return
 
         # Проверка ввода для коэффициентов
         try:
@@ -186,6 +206,7 @@ class MainWindow(QWidget):
 
     def pause_simulation(self):
         if self.timer.isActive():
+
             self.timer.stop()
             self.pause_button.setEnabled(False)
             self.resume_button.setEnabled(True)
@@ -194,6 +215,7 @@ class MainWindow(QWidget):
 
     def resume_simulation(self):
         if not self.timer.isActive() and self.is_paused:
+
             self.timer.start(self.interval)
             self.pause_button.setEnabled(True)
             self.resume_button.setEnabled(False)
@@ -214,6 +236,13 @@ class MainWindow(QWidget):
             self.resume_button.setEnabled(False)
             self.new_plot_button.setEnabled(True)
             QMessageBox.information(self, "Информация", "Отрисовка завершена.")
+        if self.fixed_time is not None and (self.idx * self.interval) >= self.fixed_time:
+            self.timer.stop()
+            self.realtime_button.setEnabled(True)
+            self.pause_button.setEnabled(False)
+            self.resume_button.setEnabled(False)
+            self.new_plot_button.setEnabled(True)
+            QMessageBox.information(self, "Информация", "Отрисовка до фиксированного времени завершена.")
 
     def new_plot(self):
         self.realtime_button.setEnabled(True)
