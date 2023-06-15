@@ -113,7 +113,7 @@ class MainWindow(QWidget):
         self.timer.timeout.connect(self.update_realtime_plot)
 
         self.is_paused = False
-        self.interval = 0  # Интервал между обновлениями графика в миллисекундах
+        self.interval = 10  # Интервал между обновлениями графика в миллисекундах
 
         self.fixed_time_label = QLabel("Фиксированное время (мс):")
         self.fixed_time_input = QLineEdit()
@@ -122,12 +122,60 @@ class MainWindow(QWidget):
 
         self.fixed_time = 1000  # Значение фиксированного времени по умолчанию
 
+        self.iteration_count = 0  # Переменная для подсчета итераций
+
+        self.instant_button = QPushButton("Отрисовать моментально")
+        self.button_layout.addWidget(self.instant_button)
+        self.instant_button.clicked.connect(self.run_instant_simulation)
+        self.instant_button.setEnabled(False)
 
         self.setLayout(self.layout)
 
+    def run_instant_simulation(self):
+        # Получение входных данных
 
+        try:
+            a1 = float(self.a1_input.text())
+            a2 = float(self.a2_input.text())
+            b1 = float(self.b1_input.text())
+            b2 = float(self.b2_input.text())
+            b3 = float(self.b3_input.text())
+            c1 = float(self.c1_input.text())
+            c2 = float(self.c2_input.text())
+
+            V0 = float(self.V0_input.text())
+            P0 = float(self.P0_input.text())
+            R0 = float(self.R0_input.text())
+        except ValueError:
+            QMessageBox.warning(self, "Ошибка", "Некорректный ввод.")
+            return
+
+        # Временные точки для интегрирования
+        t_start = 0
+        t_end = 10
+        t_points = np.linspace(t_start, t_end, 1000)
+
+        # Решение системы дифференциальных уравнений
+        solution = solve_ivp(system, [t_start, t_end], [V0, P0, R0], t_eval=t_points,
+                             args=(a1, a2, b1, b2, b3, c1, c2))
+
+        # Извлечение решения
+        V = solution.y[0]
+        P = solution.y[1]
+        R = solution.y[2]
+
+        # Отрисовка графика
+        self.ax.plot(V, P, R, 'b-')
+        self.fig.canvas.draw()
+
+        self.realtime_button.setEnabled(True)
+        self.instant_button.setEnabled(False)
+        self.new_plot_button.setEnabled(True)
+        QMessageBox.information(self, "Информация", f"Отрисовка выполнена. Количество итераций: {self.iteration_count}")
 
     def run_realtime_simulation(self):
+
+
 
         if self.timer.isActive():
             return
@@ -185,6 +233,8 @@ class MainWindow(QWidget):
         P = solution.y[1]
         R = solution.y[2]
 
+        self.iteration_count = len(t_points)
+
         # Визуализация результата
         self.V = V
         self.P = P
@@ -200,6 +250,7 @@ class MainWindow(QWidget):
         self.pause_button.setEnabled(True)
         self.resume_button.setEnabled(False)
         self.new_plot_button.setEnabled(False)
+        self.instant_button.setEnabled(True)
 
         self.timer.start(self.interval)
         self.fig.show()
@@ -224,6 +275,7 @@ class MainWindow(QWidget):
 
     def update_realtime_plot(self):
         # Обновление графика в реальном времени
+        self.iteration_count += 1  # Увеличение счетчика итераций
         try:
             self.ax.plot([self.V[self.idx-1], self.V[self.idx]], [self.P[self.idx-1], self.P[self.idx]], [self.R[self.idx-1], self.R[self.idx]], 'b-')
 
@@ -235,18 +287,19 @@ class MainWindow(QWidget):
             self.pause_button.setEnabled(False)
             self.resume_button.setEnabled(False)
             self.new_plot_button.setEnabled(True)
-            QMessageBox.information(self, "Информация", "Отрисовка завершена.")
-        if self.fixed_time is not None and (self.idx * self.interval) >= self.fixed_time:
+            QMessageBox.information(self, "Информация", f"Отрисовка завершена. Количество итераций: {self.iteration_count}")
+        if self.fixed_time is not None and (self.idx >= len(self.V)):
             self.timer.stop()
             self.realtime_button.setEnabled(True)
             self.pause_button.setEnabled(False)
             self.resume_button.setEnabled(False)
             self.new_plot_button.setEnabled(True)
-            QMessageBox.information(self, "Информация", "Отрисовка до фиксированного времени завершена.")
+            QMessageBox.information(self, "Информация", f"Отрисовка до фиксированного времени завершена. Количество итераций: {self.iteration_count}")
 
     def new_plot(self):
         self.realtime_button.setEnabled(True)
         self.new_plot_button.setEnabled(False)
+        self.instant_button.setEnabled(False)
         self.ax.clear()
         self.fig.canvas.draw()
 
