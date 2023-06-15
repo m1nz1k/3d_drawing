@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 from mpl_toolkits.mplot3d import Axes3D
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QDesktopWidget
 from PyQt5.QtCore import QTimer
 
 # Функция, описывающая систему дифференциальных уравнений
@@ -107,6 +107,9 @@ class MainWindow(QWidget):
 
         self.button_group.setLayout(self.button_layout)
         self.layout.addWidget(self.button_group)
+        self.run_button = QPushButton("Запустить")
+        self.layout.addWidget(self.run_button)
+        self.run_button.clicked.connect(self.run_simulation)
 
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -277,6 +280,55 @@ class MainWindow(QWidget):
                                                         f"Финальные координаты: {final_coordinates}")
             self.iteration_count = 0
 
+    from PyQt5.QtWidgets import QMessageBox
+
+    def run_simulation(self):
+        # Извлечение введенных данных
+        a1 = float(self.a1_input.text())
+        a2 = float(self.a2_input.text())
+        b1 = float(self.b1_input.text())
+        b2 = float(self.b2_input.text())
+        b3 = float(self.b3_input.text())
+        c1 = float(self.c1_input.text())
+        c2 = float(self.c2_input.text())
+        V0 = float(self.V0_input.text())
+        P0 = float(self.P0_input.text())
+        R0 = float(self.R0_input.text())
+
+        # Временные точки для интегрирования
+        t_start = 0
+        t_end = 10
+        t_points = np.linspace(t_start, t_end, 1000)
+
+        # Решение системы дифференциальных уравнений
+        solution = solve_ivp(system, [t_start, t_end], [V0, P0, R0], t_eval=t_points,
+                             args=(a1, a2, b1, b2, b3, c1, c2))
+
+        # Извлечение решения
+        V = solution.y[0]
+        P = solution.y[1]
+        R = solution.y[2]
+
+        # Визуализация результата
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot(V, P, R)
+        ax.set_xlabel('V')
+        ax.set_ylabel('P')
+        ax.set_zlabel('R')
+        plt.show()
+
+        # Извлечение последних координат
+        last_V = V[-1]
+        last_P = P[-1]
+        last_R = R[-1]
+
+        # Формирование строки с округленными последними координатами
+        coordinates = f"V={round(last_V, 3)}, P={round(last_P, 3)}, R={round(last_R, 3)}"
+
+        # Вывод координат в QMessageBox
+        QMessageBox.information(self, "Результаты", coordinates)
+
     def new_plot(self):
         self.realtime_button.setEnabled(True)
         self.new_plot_button.setEnabled(False)
@@ -286,5 +338,8 @@ class MainWindow(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()
+    window.setGeometry(150, 470, 100, 100)
+    window.move(QDesktopWidget().availableGeometry().center() - window.frameGeometry().center())
+
     window.show()
     sys.exit(app.exec_())
